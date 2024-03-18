@@ -84,6 +84,7 @@ static void sendTCPCloseRespToClient(Client& client, uint16_t clientId, uint8_t 
     int rc = write(client.fd, header, totalLen);
 }
 
+
 static void sendTCPSendRespToClient(Client& client, uint16_t clientId) {
     uint8_t header[8];
     uint16_t totalLen = 5;
