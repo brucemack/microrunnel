@@ -108,7 +108,6 @@ static void sendTCPRecvRespToClient(Client& client, uint16_t clientId, const uin
 }
 
 static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
-    cout << (int)frame[2] << endl;
     if (frame[2] == ClientFrameType::REQ_PING) {
     }
     else if (frame[2] == ClientFrameType::REQ_RESET) {
@@ -147,7 +146,6 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == clientId) {
                 int rc = write(proxy.fd, frame + 5, frameLen - 5);
-                cout << "RC=" << rc << endl;
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;
@@ -265,9 +263,6 @@ int main(int argc, const char** argv) {
                         client.recBufLen += rc;
                         // Do we have a complete frame?
                         if (client.recBufLen >= 2 && client.recBufLen == client.getFrameLen()) {
-                            //cout << "Got frame: " << endl;
-                            //cout.write((const char*)client.recBuf + 2, client.recBufLen - 2);
-                            //cout << endl;
                             processClientFrame(client, client.recBuf, client.recBufLen);
                             // Reset for new frame
                             client.recBufLen = 0;
