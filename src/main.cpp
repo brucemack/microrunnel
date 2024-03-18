@@ -225,7 +225,7 @@ int main(int argc, const char** argv) {
             if (FD_ISSET(serverFd, &rfds)) {
 
                 struct sockaddr_in clientAddr; 
-                int addrLen = sizeof(clientAddr);
+                socklen_t addrLen = sizeof(clientAddr);
                 int clientFd = accept(serverFd, (sockaddr*)&clientAddr, &addrLen); 
                 if (clientFd < 0) { 
                     cout << "Client accept failed" << endl;
