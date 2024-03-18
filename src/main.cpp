@@ -48,16 +48,18 @@ enum ClientFrameType {
     REQ_PING,
     REQ_RESET,
     REQ_OPEN_TCP,
-    REQ_CLOSE_TCP,
     REQ_SEND_TCP,
     REQ_OPEN_UDP,
-    REQ_CLOSE_UDP,
     REQ_SEND_UDP,
+    REQ_CLOSE,
     REQ_QUERY_DNS,
     RESP_OPEN_TCP,
-    RESP_CLOSE_TCP,
     RESP_SEND_TCP,
     RESP_RECV_TCP,
+    RESP_OPEN_UDP,
+    RESP_SEND_UDP,
+    RESP_RECV_UDP,
+    RESP_CLOSE,
     RESP_QUERY_DNS
 };
 
@@ -73,12 +75,12 @@ static void sendTCPOpenRespToClient(Client& client, uint16_t clientId, uint8_t c
     int rc = write(client.fd, header, totalLen);
 }
 
-static void sendTCPCloseRespToClient(Client& client, uint16_t clientId, uint8_t c) {
+static void sendCloseRespToClient(Client& client, uint16_t clientId, uint8_t c) {
     uint8_t header[8];
     uint16_t totalLen = 6;
     header[0] = (totalLen & 0xff00) >> 8;
     header[1] = (totalLen & 0x00ff);
-    header[2] = ClientFrameType::RESP_CLOSE_TCP;
+    header[2] = ClientFrameType::RESP_CLOSE;
     header[3] = (clientId & 0xff00) >> 8;
     header[4] = clientId & 0x00ff;
     header[5] = c;
@@ -186,9 +188,6 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
                 // Send a failure message
                 sendDNSQueryRespToClient(client, 0, 0, 1);
             } else {
-                for (int i = 0; addr_list[i] != NULL; i++) {
-                    printf("%s\n", inet_ntoa(*addr_list[i]));
-                }
                 sendDNSQueryRespToClient(client, hostName, ntohl(addr_list[0]->s_addr), 0);                
             }
         }
@@ -322,7 +321,7 @@ int main(int argc, const char** argv) {
                             proxy.fd = 0;
                             proxy.isDead = true;
                             cout << "Sending disconnect to client" << endl;
-                            sendTCPCloseRespToClient(client, proxy.clientId, 0);
+                            sendCloseRespToClient(client, proxy.clientId, 0);
                         } 
                         // Proxy received data, send it back to the client
                         else {
