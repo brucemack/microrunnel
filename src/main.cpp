@@ -57,7 +57,8 @@ enum ClientFrameType {
     RESP_OPEN_TCP,
     RESP_CLOSE_TCP,
     RESP_SEND_TCP,
-    RESP_RECV_TCP
+    RESP_RECV_TCP,
+    RESP_QUERY_DNS
 };
 
 static void sendTCPOpenRespToClient(Client& client, uint16_t clientId, uint8_t c) {
@@ -107,6 +108,25 @@ static void sendTCPRecvRespToClient(Client& client, uint16_t clientId, const uin
     rc = write(client.fd, data, dataLen);
 }
 
+static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint32_t addr, uint8_t c) {
+    uint8_t header[16];
+    uint16_t totalLen = 8;
+    if (hostName != 0) {
+        totalLen += strlen(hostName);
+    }
+    header[0] = (totalLen & 0xff00) >> 8;
+    header[1] = (totalLen & 0x00ff);
+    header[2] = ClientFrameType::RESP_QUERY_DNS;
+    header[3] = c;
+    header[4] = (addr & 0xff000000) >> 24;
+    header[5] = (addr & 0x00ff0000) >> 16;
+    header[6] = (addr & 0x0000ff00) >> 8;
+    header[7] = (addr & 0x000000ff);
+    int rc = write(client.fd, header, 8);
+    if (hostName != 0)
+        rc = write(client.fd, hostName, strlen(hostName));
+}
+
 static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
     if (frame[2] == ClientFrameType::REQ_PING) {
     }
@@ -149,6 +169,27 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;
+            }
+        }
+    }
+    else if (frame[2] == ClientFrameType::REQ_QUERY_DNS) {
+        char hostName[64];
+        memcpy(hostName, frame + 3, frameLen - 3);
+        hostName[frameLen - 3] = 0;
+        struct hostent* he = gethostbyname(hostName);
+        if (he == 0) {
+            // Send a failure message
+            sendDNSQueryRespToClient(client, 0, 0, 1);
+        } else {
+            const in_addr** addr_list = (const in_addr **)he->h_addr_list;
+            if (addr_list[0] == 0) {
+                // Send a failure message
+                sendDNSQueryRespToClient(client, 0, 0, 1);
+            } else {
+                for (int i = 0; addr_list[i] != NULL; i++) {
+                    printf("%s\n", inet_ntoa(*addr_list[i]));
+                }
+                sendDNSQueryRespToClient(client, hostName, ntohl(addr_list[0]->s_addr), 0);                
             }
         }
     }
