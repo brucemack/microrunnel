@@ -10,8 +10,10 @@ add_compile_options(-fstack-protector-all -Wall -Wpedantic -g)
 #
 add_executable(main
   src/main.cpp
+  kc1fsz-tools-cpp/src/Common.cpp
 )
 
 target_include_directories(main PRIVATE src)
 target_include_directories(main PRIVATE include)
+target_include_directories(main PRIVATE kc1fsz-tools-cpp/include)
 

@@ -1,0 +1,3 @@
+[submodule "kc1fsz-tools-cpp"]
+	path = kc1fsz-tools-cpp
+	url = https://github.com/brucemack/kc1fsz-tools-cpp.git

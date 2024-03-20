@@ -14,10 +14,20 @@
 #include <iostream>
 #include <vector>
 #include <algorithm>
+#include <cassert>
 
 #include "microtunnel/common.h"
+#include "kc1fsz-tools/Common.h"
 
 using namespace std;
+using namespace kc1fsz;
+
+namespace kc1fsz {
+void panic(const char* msg) {
+    cerr << msg << endl;
+    assert(false);
+}
+}
 
 struct Proxy {
     // The id assigned by the client for this proxy
@@ -151,6 +161,7 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
 
         RequestSendTCP req;
         memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
+        prettyHexDump(req.contentPlaceholder, frameLen - 5, cout);
 
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == req.clientId) {
