@@ -50,7 +50,15 @@ uint16_t a_htons(uint16_t a) {
 #ifdef PICO_BUILD
         return (a & 0x00ff) << 8 | (a & 0xff00) >> 8;
 #else
-        retrun htons(a);
+        return htons(a);
+#endif
+}
+
+uint32_t a_htonl(uint32_t a) {
+#ifdef PICO_BUILD
+        return (a & 0x000000ff) << 24 | (a & 0x0000ff00) << 8 | (a & 0x00ff0000) >> 8 | (a & 0xff000000) >> 24;
+#else
+        return htonl(a);
 #endif
 }
 
@@ -58,7 +66,15 @@ uint16_t a_ntohs(uint16_t a) {
 #ifdef PICO_BUILD
         return (a & 0x00ff) << 8 | (a & 0xff00) >> 8;
 #else
-        retrun htons(a);
+        return htons(a);
+#endif
+}
+
+uint32_t a_ntohl(uint32_t a) {
+#ifdef PICO_BUILD
+        return (a & 0x000000ff) << 24 | (a & 0x0000ff00) << 8 | (a & 0x00ff0000) >> 8 | (a & 0xff000000) >> 24;
+#else
+        return htonl(a);
 #endif
 }
 
@@ -79,11 +95,44 @@ private:
 
 } __attribute__((packed));
 
+class be_uint32_t {
+public:
+        be_uint32_t() : be_val_(0) {
+        }
+        // Transparently cast from uint16_t
+        be_uint32_t(const uint32_t &val) : be_val_(a_htonl(val)) {
+        }
+        // Transparently cast to uint32_t
+        operator uint32_t() const {
+                return a_ntohl(be_val_);
+        }
+
+private:
+        uint32_t be_val_;
+
+} __attribute__((packed));
+
+
+struct RequestOpenTCP {
+    be_uint16_t len;
+    be_uint16_t type;
+    be_uint16_t clientId;
+    be_uint32_t addr;
+    be_uint16_t port;
+};
+
 struct RequestSendTCP {
     be_uint16_t len;
     be_uint16_t type;
     be_uint16_t clientId;
+    // WARNING: Content will be of a different length!
     uint8_t contentPlaceholder[2048];
+};
+
+struct RequestQueryDNS {
+    be_uint16_t len;
+    be_uint16_t type;
+    char name[64];
 };
 
 #endif

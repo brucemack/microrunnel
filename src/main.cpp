@@ -123,16 +123,30 @@ static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint3
 }
 
 static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
-    if (frame[2] == ClientFrameType::REQ_PING) {
+
+    const uint16_t reqLen = a_ntohs(*((uint16_t*)frame));
+    const uint16_t reqType = a_ntohs(*((uint16_t*)(frame + 3)));
+
+    // Sanity check
+    if (reqLen != frameLen) {
+        cout << "Length error" << endl;
+        return;
     }
-    else if (frame[2] == ClientFrameType::REQ_RESET) {
+
+    if (reqType == ClientFrameType::REQ_PING) {
     }
-    else if (frame[2] == ClientFrameType::REQ_OPEN_TCP) {
+    else if (reqType == ClientFrameType::REQ_RESET) {
+    }
+    else if (reqType == ClientFrameType::REQ_OPEN_TCP) {
+
+        RequestOpenTCP req;
+        memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
+
         Proxy proxy;
-        proxy.clientId = frame[3] << 8 | frame[4];
         proxy.type = Proxy::Type::TCP;
-        uint32_t targetAddr = frame[5] << 24 | frame[6] << 16 | frame[7] << 8 | frame[8];
-        uint16_t targetPort = frame[9] << 8 | frame[10];
+        proxy.clientId = req.clientId;
+        uint32_t targetAddr = req.addr;
+        uint16_t targetPort = req.port;
 
         proxy.fd = socket(AF_INET, SOCK_STREAM, 0);
         struct sockaddr_in target; 
@@ -157,8 +171,9 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
             sendTCPOpenRespToClient(client, proxy.clientId, 0);
         }
     }
-    else if (frame[2] == ClientFrameType::REQ_SEND_TCP) {
+    else if (reqType == ClientFrameType::REQ_SEND_TCP) {
 
+        // TODO: SIZE CHECK
         RequestSendTCP req;
         memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
         prettyHexDump(req.contentPlaceholder, frameLen - 5, cout);
@@ -171,12 +186,14 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
                 return;
             }
         }
+        // TODO: ERROR
     }
-    else if (frame[2] == ClientFrameType::REQ_QUERY_DNS) {
-        char hostName[64];
-        memcpy(hostName, frame + 3, frameLen - 3);
-        hostName[frameLen - 3] = 0;
-        struct hostent* he = gethostbyname(hostName);
+    else if (reqType == ClientFrameType::REQ_QUERY_DNS) {
+
+        RequestQueryDNS req;
+        memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
+
+        struct hostent* he = gethostbyname(req.name);
         if (he == 0) {
             // Send a failure message
             sendDNSQueryRespToClient(client, 0, 0, 1);
@@ -186,9 +203,12 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
                 // Send a failure message
                 sendDNSQueryRespToClient(client, 0, 0, 1);
             } else {
-                sendDNSQueryRespToClient(client, hostName, ntohl(addr_list[0]->s_addr), 0);                
+                sendDNSQueryRespToClient(client, req.name, ntohl(addr_list[0]->s_addr), 0);                
             }
         }
+    }
+    else {
+        cout << "Unrecognized request: " << reqType << endl;
     }
 }
 
