@@ -46,16 +46,32 @@ enum ClientFrameType {
     RESP_QUERY_DNS
 };
 
+uint16_t a_htons(uint16_t a) {
+#ifdef PICO_BUILD
+        return (a & 0x00ff) << 8 | (a & 0xff00) >> 8;
+#else
+        retrun htons(a);
+#endif
+}
+
+uint16_t a_ntohs(uint16_t a) {
+#ifdef PICO_BUILD
+        return (a & 0x00ff) << 8 | (a & 0xff00) >> 8;
+#else
+        retrun htons(a);
+#endif
+}
+
 class be_uint16_t {
 public:
         be_uint16_t() : be_val_(0) {
         }
         // Transparently cast from uint16_t
-        be_uint16_t(const uint16_t &val) : be_val_(htons(val)) {
+        be_uint16_t(const uint16_t &val) : be_val_(a_htons(val)) {
         }
         // Transparently cast to uint16_t
         operator uint16_t() const {
-                return ntohs(be_val_);
+                return a_ntohs(be_val_);
         }
 
 private:
