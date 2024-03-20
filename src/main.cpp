@@ -125,7 +125,7 @@ static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint3
 static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
 
     const uint16_t reqLen = a_ntohs(*((uint16_t*)frame));
-    const uint16_t reqType = a_ntohs(*((uint16_t*)(frame + 3)));
+    const uint16_t reqType = a_ntohs(*((uint16_t*)(frame + 2)));
 
     // Sanity check
     if (reqLen != frameLen) {
