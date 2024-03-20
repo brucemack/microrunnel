@@ -15,11 +15,13 @@
 #include <vector>
 #include <algorithm>
 
+#include "microtunnel/common.h"
+
 using namespace std;
 
 struct Proxy {
     // The id assigned by the client for this proxy
-    uint32_t clientId;
+    uint16_t clientId;
     // The actual socket used
     int fd;
     bool isDead = false;
@@ -42,25 +44,6 @@ struct Client {
 
     // All of the active proxies for this client
     std::vector<Proxy> proxies;
-};
-
-enum ClientFrameType {
-    REQ_PING,
-    REQ_RESET,
-    REQ_OPEN_TCP,
-    REQ_SEND_TCP,
-    REQ_OPEN_UDP,
-    REQ_SEND_UDP,
-    REQ_CLOSE,
-    REQ_QUERY_DNS,
-    RESP_OPEN_TCP,
-    RESP_SEND_TCP,
-    RESP_RECV_TCP,
-    RESP_OPEN_UDP,
-    RESP_SEND_UDP,
-    RESP_RECV_UDP,
-    RESP_CLOSE,
-    RESP_QUERY_DNS
 };
 
 static void sendTCPOpenRespToClient(Client& client, uint16_t clientId, uint8_t c) {
@@ -149,7 +132,8 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
 
         char buf[32];
         inet_ntop(AF_INET, &(target.sin_addr.s_addr), buf, 32);
-        cout << "Connecting to " << buf << endl;
+        cout << "TCP connecting to " << buf << ":" << targetPort 
+            << " (" << proxy.clientId << ")" << endl;
 
         int rc = connect(proxy.fd, (sockaddr*)&target, sizeof(target));
         if (rc != 0) {
@@ -164,10 +148,13 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         }
     }
     else if (frame[2] == ClientFrameType::REQ_SEND_TCP) {
-        uint16_t clientId = frame[3] << 8 | frame[4];
+
+        RequestSendTCP req;
+        memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
+
         for (Proxy& proxy : client.proxies) {
-            if (proxy.clientId == clientId) {
-                int rc = write(proxy.fd, frame + 5, frameLen - 5);
+            if (proxy.clientId == req.clientId) {
+                int rc = write(proxy.fd, req.contentPlaceholder, frameLen - 5);
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;

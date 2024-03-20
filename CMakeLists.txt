@@ -13,3 +13,5 @@ add_executable(main
 )
 
 target_include_directories(main PRIVATE src)
+target_include_directories(main PRIVATE include)
+
