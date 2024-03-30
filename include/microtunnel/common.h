@@ -163,7 +163,7 @@ struct RequestSendUDP {
     be_uint16_t port;
     // WARNING: Content will be of a different length!  This is just defining
     // the maximum area that can be used by the packet.
-    uint8_t contentPlaceholder[2048];
+    uint8_t data[2048];
 };
 
 // Len = 12 + data

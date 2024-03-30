@@ -257,6 +257,32 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         }
         // TODO: ERROR
     }
+    else if (reqType == ClientFrameType::REQ_SEND_UDP) {
+
+        if (frameLen < 12) {
+            cout << "Invalid request ignored" << endl;
+            return;
+        }
+
+        RequestSendUDP req;
+        const uint32_t dataLen = frameLen - 12;
+        memcpyLimited((uint8_t*)&req, frame, frameLen, (unsigned int)sizeof(req));
+        prettyHexDump(req.data, dataLen, cout);
+
+        struct sockaddr_in peerAddr; 
+        memset(&peerAddr, 0, sizeof(peerAddr)); 
+        peerAddr.sin_family = AF_INET; 
+        peerAddr.sin_addr.s_addr = htonl(req.addr);
+        peerAddr.sin_port = htons(req.port); 
+    
+        auto it = std::find_if(client.proxies.begin(), client.proxies.end(), 
+            [&req](const Proxy& x) { return x.clientId == req.id; });
+        if (it != client.proxies.end()) {
+            int rc = sendto(it->fd, req.data, dataLen, 0, 
+                (const struct sockaddr *)&peerAddr, sizeof(peerAddr));
+            return;
+        }
+    }
     else if (reqType == ClientFrameType::REQ_QUERY_DNS) {
 
         RequestQueryDNS req;
