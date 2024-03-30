@@ -278,9 +278,9 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         auto it = std::find_if(client.proxies.begin(), client.proxies.end(), 
             [&req](const Proxy& x) { return x.clientId == req.id; });
         if (it != client.proxies.end()) {
-            int rc = sendto(it->fd, req.data, dataLen, 0, 
+            sendto(it->fd, req.data, dataLen, 0, 
                 (const struct sockaddr *)&peerAddr, sizeof(peerAddr));
-            return;
+            // TODO: ERRORS?
         }
     }
     else if (reqType == ClientFrameType::REQ_QUERY_DNS) {
@@ -420,6 +420,7 @@ int main(int argc, const char** argv) {
                     flags = (flags | O_NONBLOCK);
                     fcntl(serverFd, F_SETFL, flags);
 
+                    /*
                     // Turn on keep-alive
                     int yes = 1;
                     setsockopt(clientFd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int));
@@ -432,11 +433,16 @@ int main(int argc, const char** argv) {
                     // Number of bad probes before we give up
                     int maxpkt = 5;
                     setsockopt(clientFd, IPPROTO_TCP, TCP_KEEPCNT, &maxpkt, sizeof(int));
+                    */
+
+                    // Mark all other clients as dead - we should only have one
+                    for (Client& client : clients)
+                        client.isDead = true;
 
                     clients.push_back({ clientFd, clientAddr });
                     char buf[32];
                     inet_ntop(AF_INET, &(clients.at(0).addr.sin_addr), buf, 32);
-                    cout << "Client from " << buf << endl;
+                    cout << "New client from " << buf << endl;
                 }
             }
 
