@@ -8,6 +8,7 @@
 #include <unistd.h> 
 #include <fcntl.h>
 #include <arpa/inet.h>
+#include <netinet/tcp.h>
 
 #define PORT 8100
 
@@ -18,6 +19,7 @@
 
 #include "microtunnel/common.h"
 #include "kc1fsz-tools/Common.h"
+#include "kc1fsz-tools/IPAddress.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -136,6 +138,24 @@ static void sendTCPRecvRespToClient(Client& client, uint16_t clientId, const uin
     header[4] = clientId & 0x00ff;
     int rc = write(client.fd, header, 5);
     rc = write(client.fd, data, dataLen);
+}
+
+static void sendRecvDataToClient(Client& client, uint16_t id, const uint8_t* data, uint16_t dataLen,
+    const IPAddress& addr, uint16_t port) {
+
+    if (dataLen > 2048) {
+        panic("Data too long");
+        return;
+    }
+
+    RecvData frame;
+    frame.len = 12 + dataLen;
+    frame.type = ClientFrameType::RECV_DATA;
+    frame.id = id;
+    frame.addr = addr.getAddr();
+    frame.port = port;
+    memcpyLimited(frame.data, data, dataLen, sizeof(frame.data));
+    write(client.fd, &frame, frame.len);
 }
 
 static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint32_t addr, uint8_t c) {
@@ -374,6 +394,19 @@ int main(int argc, const char** argv) {
                     flags = (flags | O_NONBLOCK);
                     fcntl(serverFd, F_SETFL, flags);
 
+                    // Turn on keep-alive
+                    int yes = 1;
+                    setsockopt(clientFd, SOL_SOCKET, SO_KEEPALIVE, &yes, sizeof(int));
+                    // Idle interval before probes start
+                    int idle = 10;
+                    setsockopt(clientFd, IPPROTO_TCP, TCP_KEEPIDLE, &idle, sizeof(int));
+                    // Time between probes
+                    int interval = 5;
+                    setsockopt(clientFd, IPPROTO_TCP, TCP_KEEPINTVL, &interval, sizeof(int));
+                    // Number of bad probes before we give up
+                    int maxpkt = 5;
+                    setsockopt(clientFd, IPPROTO_TCP, TCP_KEEPCNT, &maxpkt, sizeof(int));
+
                     clients.push_back({ clientFd, clientAddr });
                     char buf[32];
                     inet_ntop(AF_INET, &(clients.at(0).addr.sin_addr), buf, 32);
@@ -412,17 +445,37 @@ int main(int argc, const char** argv) {
                 // Check all proxies for activity
                 for (Proxy& proxy : client.proxies) {
                     if (FD_ISSET(proxy.fd, &rfds)) {
-                        uint8_t buf[256];
-                        int rc = read(proxy.fd, (char*)buf, 256);
-                        // Proxy disconnect case
-                        if (rc <= 0) {
-                            proxy.isDead = true;
-                            cout << "Sending disconnect to client" << endl;
-                            sendCloseRespToClient(client, proxy.clientId, 0);
+
+                        if (proxy.type == Proxy::Type::TCP) {
+                            uint8_t buf[256];
+                            int rc = read(proxy.fd, (char*)buf, 256);
+                            // Proxy disconnect case
+                            if (rc <= 0) {
+                                proxy.isDead = true;
+                                cout << "Sending disconnect to client" << endl;
+                                sendCloseRespToClient(client, proxy.clientId, 0);
+                            } 
+                            // Proxy received data, send it back to the client
+                            else {
+                                sendTCPRecvRespToClient(client, proxy.clientId, buf, rc);
+                            }
                         } 
-                        // Proxy received data, send it back to the client
-                        else {
-                            sendTCPRecvRespToClient(client, proxy.clientId, buf, rc);
+                        else if (proxy.type == Proxy::Type::UDP) {
+                            uint8_t buf[256];
+                            struct sockaddr_in peerAddr;         
+                            int peerAddrLen = sizeof(peerAddr);            
+                            int rc = recvfrom(proxy.fd, (char*)buf, sizeof(buf), MSG_WAITALL,
+                                (sockaddr*)&peerAddr, &peerAddrLen);
+                            // Proxy disconnect case
+                            if (rc <= 0) {
+                                proxy.isDead = true;
+                            } 
+                            // Proxy received data, send it back to the client
+                            else {
+                                IPAddress addr(ntohl(peerAddr.sin_addr.s_addr));
+                                uint16_t port = ntohs(peerAddr.sin_port);
+                                sendRecvDataToClient(client, proxy.clientId, buf, rc, addr, port);
+                            }
                         }
                     }
                 }
