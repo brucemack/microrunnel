@@ -155,6 +155,18 @@ struct ResponseBindUDP {
 };
 
 // Len = 12 + data
+struct RequestSendUDP {
+    be_uint16_t len;
+    be_uint16_t type;
+    be_uint16_t id;
+    be_uint32_t addr;
+    be_uint16_t port;
+    // WARNING: Content will be of a different length!  This is just defining
+    // the maximum area that can be used by the packet.
+    uint8_t contentPlaceholder[2048];
+};
+
+// Len = 12 + data
 struct RecvData {
     be_uint16_t len;
     be_uint16_t type;
