@@ -463,7 +463,7 @@ int main(int argc, const char** argv) {
                         else if (proxy.type == Proxy::Type::UDP) {
                             uint8_t buf[256];
                             struct sockaddr_in peerAddr;         
-                            int peerAddrLen = sizeof(peerAddr);            
+                            socklen_t peerAddrLen = sizeof(peerAddr);            
                             int rc = recvfrom(proxy.fd, (char*)buf, sizeof(buf), MSG_WAITALL,
                                 (sockaddr*)&peerAddr, &peerAddrLen);
                             // Proxy disconnect case
