@@ -31,10 +31,10 @@ void panic(const char* msg) {
 
 struct Proxy {
 
-    ~Proxy() {
+    void close() {
         if (fd != 0) {
             cout << "Closing proxy " << clientId << endl;
-            close(fd);
+            ::close(fd);
         }
     }
 
@@ -48,11 +48,30 @@ struct Proxy {
 
 struct Client {
 
-    ~Client() {
+    void close() {
+        // Close all proxies
+        for (Proxy p : proxies) p.close();
         if (fd != 0) {
             cout << "Closing client" << endl;
-            close(fd);
+            ::close(fd);
         }
+    }
+
+    void cleanup() {
+        if (!proxies.empty()) {
+            for (Proxy p : proxies) {
+                if (p.isDead) p.close();
+            }
+            proxies.erase(
+                std::remove_if(
+                    proxies.begin(), 
+                    proxies.end(),
+                    [](const Proxy& x) { return x.isDead; }
+                ),
+                proxies.end()
+            );
+        }
+
     }
 
     // The socket back to the client
@@ -377,8 +396,8 @@ int main(int argc, const char** argv) {
                     }
                     int rc = read(client.fd, client.recBuf + client.recBufLen, maxReadSize);
                     if (rc <= 0)                     {
-                        cout << "Client disconnected" << endl;
                         client.isDead = true;
+                        cout << "Client disconnected" << endl;
                     } else {
                         client.recBufLen += rc;
                         // Do we have a complete frame?
@@ -397,8 +416,6 @@ int main(int argc, const char** argv) {
                         int rc = read(proxy.fd, (char*)buf, 256);
                         // Proxy disconnect case
                         if (rc <= 0) {
-                            close(proxy.fd);
-                            proxy.fd = 0;
                             proxy.isDead = true;
                             cout << "Sending disconnect to client" << endl;
                             sendCloseRespToClient(client, proxy.clientId, 0);
@@ -413,20 +430,13 @@ int main(int argc, const char** argv) {
         }
 
         // Cleanup dead proxies
-        for (Client& client : clients) {
-            if (!client.proxies.empty())
-                client.proxies.erase(
-                    std::remove_if(
-                        client.proxies.begin(), 
-                        client.proxies.end(),
-                        [](const Proxy& x) { return x.isDead; }
-                    ),
-                    client.proxies.end()
-                );
-        }
+        for (Client& client : clients) client.cleanup();
 
         // Cleanup dead clients
-        if (!clients.empty())
+        if (!clients.empty()) {
+            for (Client& client : clients) {
+                if (client.isDead) client.close();
+            }
             clients.erase(
                 std::remove_if(
                     clients.begin(), 
@@ -435,5 +445,6 @@ int main(int argc, const char** argv) {
                 ),
                 clients.end()
             );
+        }
     }
 }
