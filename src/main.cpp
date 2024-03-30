@@ -30,17 +30,33 @@ void panic(const char* msg) {
 }
 
 struct Proxy {
+
+    ~Proxy() {
+        if (fd != 0) {
+            cout << "Closing proxy " << clientId << endl;
+            close(fd);
+        }
+    }
+
     // The id assigned by the client for this proxy
-    uint16_t clientId;
+    uint16_t clientId = 0;
     // The actual socket used
-    int fd;
+    int fd = 0;
     bool isDead = false;
-    enum Type { UNKNOWN, TCP, UDP, } type;
+    enum Type { UNKNOWN, TCP, UDP, } type = Type::UNKNOWN;
 };
 
 struct Client {
+
+    ~Client() {
+        if (fd != 0) {
+            cout << "Closing client" << endl;
+            close(fd);
+        }
+    }
+
     // The socket back to the client
-    int fd;
+    int fd = 0;
     // The address of the client
     sockaddr_in addr;
     bool isDead = false;
@@ -363,7 +379,6 @@ int main(int argc, const char** argv) {
                     if (rc <= 0)                     {
                         cout << "Client disconnected" << endl;
                         client.isDead = true;
-                        close(client.fd);
                     } else {
                         client.recBufLen += rc;
                         // Do we have a complete frame?
