@@ -122,6 +122,20 @@ static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint3
         rc = write(client.fd, hostName, strlen(hostName));
 }
 
+void encodeInt16BE(uint16_t i, uint8_t* target) {
+    target[0] = (i & 0xff00) >> 8;
+    target[1] = (i & 0x00ff);
+}
+
+static void sendUDPBindRespToClient(Client& client, uint16_t id, uint16_t rc) {
+    ResponseBindUDP resp;
+    resp.len = sizeof(ResponseBindUDP);
+    resp.type = ClientFrameType::RESP_BIND_UDP;
+    resp.id = id;
+    resp.rc = rc;
+    write(client.fd, &resp, resp.len);
+}
+
 static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
 
     const uint16_t reqLen = a_ntohs(*((uint16_t*)frame));
@@ -207,6 +221,35 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
             }
         }
     }
+    else if (reqType == ClientFrameType::REQ_BIND_UDP) {
+
+        RequestBindUDP req;
+        memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
+
+        Proxy proxy;
+        proxy.type = Proxy::Type::UDP;
+        proxy.clientId = req.id;
+
+        proxy.fd = socket(AF_INET, SOCK_DGRAM, 0);
+        
+        struct sockaddr_in serverAddr; 
+        memset(&serverAddr, 0, sizeof(serverAddr)); 
+        serverAddr.sin_family = AF_INET; 
+        serverAddr.sin_addr.s_addr = INADDR_ANY; 
+        serverAddr.sin_port = htons(req.bindPort); 
+
+        if (bind(proxy.fd, (const struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
+            cout << "Failed to bind" << endl;
+            close(proxy.fd);
+            // Send back an error
+            sendUDPBindRespToClient(client, req.id, 1);
+        }
+        else {
+            cout << "Bound client " << req.id << " on port " << req.bindPort << endl;
+            client.proxies.push_back(proxy);
+            sendUDPBindRespToClient(client, req.id, 0);
+        }        
+    }
     else {
         cout << "Unrecognized request: " << reqType << endl;
     }
@@ -225,6 +268,10 @@ int main(int argc, const char** argv) {
         cerr << "Server socket creation failed" << endl;
         return -1;
     } 
+
+    int v = 1;
+    if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(int)) < 0)
+        cerr << "setsockopt(SO_REUSEADDR) failed" << endl;
 
     bzero(&serverAddr, sizeof(serverAddr));    
     // assign IP, PORT 

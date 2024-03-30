@@ -28,19 +28,23 @@ enum ClientFrameType {
     REQ_OPEN_TCP,
     // 3
     REQ_SEND_TCP,
-    REQ_OPEN_UDP,
+    // 0x04
+    REQ_BIND_UDP,
     REQ_SEND_UDP,
     REQ_CLOSE,
     // 7
     REQ_QUERY_DNS,
     // 8
     RESP_OPEN_TCP,
+    // 0x09
     RESP_SEND_TCP,
+    // 0x0a
     RESP_RECV_TCP,
-    RESP_OPEN_UDP,
+    // 0x0b
+    RESP_BIND_UDP,
     RESP_SEND_UDP,
     RESP_RECV_UDP,
-    // 14
+    // 14 (0x0e)
     RESP_CLOSE,
     // 15
     RESP_QUERY_DNS
@@ -133,6 +137,20 @@ struct RequestQueryDNS {
     be_uint16_t len;
     be_uint16_t type;
     char name[64];
+};
+
+struct RequestBindUDP {
+    be_uint16_t len;
+    be_uint16_t type;
+    be_uint16_t id;
+    be_uint16_t bindPort;
+};
+
+struct ResponseBindUDP {
+    be_uint16_t len;
+    be_uint16_t type;
+    be_uint16_t id;
+    be_uint16_t rc;
 };
 
 #endif
