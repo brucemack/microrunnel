@@ -247,12 +247,11 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         // TODO: SIZE CHECK
         RequestSendTCP req;
         memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
-        log->debugDump("Sending TCP data", req.contentPlaceholder, frameLen - 5);
+        //log->debugDump("Sending TCP data", req.contentPlaceholder, frameLen - 5);
 
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == req.clientId) {
                 int rc = write(proxy.fd, req.contentPlaceholder, frameLen - 5);
-                log->info("Write rc=%d", rc);
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;
@@ -263,14 +262,16 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
     else if (reqType == ClientFrameType::REQ_SEND_UDP) {
 
         if (frameLen < 12) {
-            cout << "Invalid request ignored" << endl;
+            log->error("Invalid request ignored");
             return;
         }
 
         RequestSendUDP req;
         const uint32_t dataLen = frameLen - 12;
         memcpyLimited((uint8_t*)&req, frame, frameLen, (unsigned int)sizeof(req));
-        prettyHexDump(req.data, dataLen, cout);
+
+        //log->debugDump("Sending UDP data", req.data, dataLen);
+        log->info("Sending UDP data");
 
         struct sockaddr_in peerAddr; 
         memset(&peerAddr, 0, sizeof(peerAddr)); 
@@ -323,19 +324,19 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         serverAddr.sin_port = htons(req.bindPort); 
 
         if (bind(proxy.fd, (const struct sockaddr *)&serverAddr, sizeof(serverAddr)) < 0) {
-            cout << "Failed to bind" << endl;
+            log->error("Failed to bind id %d", req.id);
             close(proxy.fd);
             // Send back an error
             sendUDPBindRespToClient(client, req.id, 1);
         }
         else {
-            cout << "Bound client " << req.id << " on port " << req.bindPort << endl;
+            log->info("Bound id %d on port", req.id, req.bindPort);
             client.proxies.push_back(proxy);
             sendUDPBindRespToClient(client, req.id, 0);
         }        
     }
     else {
-        cout << "Unrecognized request: " << reqType << endl;
+        log->error("Unrecognized request %d", reqType);
     }
 }
 
@@ -495,19 +496,18 @@ int main(int argc, const char** argv) {
                             } 
                             // Proxy received data, send it back to the client
                             else {
-                                log.info("Received data from proxy %u", proxy.clientId);
-                                log.debugDump("Data", buf, rc);
-
+                                log.info("Received TCP data from proxy %u", proxy.clientId);
+                                //log.debugDump("Data", buf, rc);
                                 sendTCPRecvRespToClient(client, proxy.clientId, buf, rc);
                             }
                         } 
                         else if (proxy.type == Proxy::Type::UDP) {
-                            uint8_t buf[256];
+                            uint8_t buf[1024];
                             struct sockaddr_in peerAddr;         
                             socklen_t peerAddrLen = sizeof(peerAddr);            
                             int rc = recvfrom(proxy.fd, (char*)buf, sizeof(buf), MSG_WAITALL,
                                 (sockaddr*)&peerAddr, &peerAddrLen);
-                            // Proxy disconnect case
+                            // Proxy disconnect/error case
                             if (rc <= 0) {
                                 proxy.isDead = true;
                             } 
@@ -515,6 +515,9 @@ int main(int argc, const char** argv) {
                             else {
                                 IPAddress addr(ntohl(peerAddr.sin_addr.s_addr));
                                 uint16_t port = ntohs(peerAddr.sin_port);
+                                log.info("Received UDP data from proxy for id %u len %d", 
+                                    proxy.clientId, rc);
+                                //log.debugDump("Data", buf, rc);
                                 sendRecvDataToClient(client, proxy.clientId, buf, rc, addr, port);
                             }
                         }
