@@ -103,7 +103,8 @@ static void sendTCPOpenRespToClient(Client& client, uint16_t clientId, uint8_t c
     header[3] = (clientId & 0xff00) >> 8;
     header[4] = clientId & 0x00ff;
     header[5] = c;
-    int rc = write(client.fd, header, totalLen);
+    // TODO: ERROR
+    write(client.fd, header, totalLen);
 }
 
 static void sendCloseRespToClient(Client& client, uint16_t clientId, uint8_t c) {
@@ -115,7 +116,8 @@ static void sendCloseRespToClient(Client& client, uint16_t clientId, uint8_t c) 
     header[3] = (clientId & 0xff00) >> 8;
     header[4] = clientId & 0x00ff;
     header[5] = c;
-    int rc = write(client.fd, header, totalLen);
+    // TODO: ERROR
+    write(client.fd, header, totalLen);
 }
 
 static void sendTCPSendRespToClient(Client& client, uint16_t clientId) {
@@ -126,7 +128,8 @@ static void sendTCPSendRespToClient(Client& client, uint16_t clientId) {
     header[2] = ClientFrameType::RESP_SEND_TCP;
     header[3] = (clientId & 0xff00) >> 8;
     header[4] = clientId & 0x00ff;
-    int rc = write(client.fd, header, totalLen);
+    // TODO: ERROR
+    write(client.fd, header, totalLen);
 }
 
 static void sendTCPRecvRespToClient(Client& client, uint16_t clientId, const uint8_t* data, uint16_t dataLen) {
@@ -137,8 +140,9 @@ static void sendTCPRecvRespToClient(Client& client, uint16_t clientId, const uin
     header[2] = ClientFrameType::RESP_RECV_TCP;
     header[3] = (clientId & 0xff00) >> 8;
     header[4] = clientId & 0x00ff;
-    int rc = write(client.fd, header, 5);
-    rc = write(client.fd, data, dataLen);
+    // TODO: ERROR
+    write(client.fd, header, 5);
+    write(client.fd, data, dataLen);
 }
 
 static void sendRecvDataToClient(Client& client, uint16_t id, const uint8_t* data, uint16_t dataLen,
@@ -173,14 +177,10 @@ static void sendDNSQueryRespToClient(Client& client, const char* hostName, uint3
     header[5] = (addr & 0x00ff0000) >> 16;
     header[6] = (addr & 0x0000ff00) >> 8;
     header[7] = (addr & 0x000000ff);
-    int rc = write(client.fd, header, 8);
+    // TODO: ERROR
+    write(client.fd, header, 8);
     if (hostName != 0)
-        rc = write(client.fd, hostName, strlen(hostName));
-}
-
-void encodeInt16BE(uint16_t i, uint8_t* target) {
-    target[0] = (i & 0xff00) >> 8;
-    target[1] = (i & 0x00ff);
+        write(client.fd, hostName, strlen(hostName));
 }
 
 static void sendUDPBindRespToClient(Client& client, uint16_t id, uint16_t rc) {
@@ -227,8 +227,7 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
 
         char buf[32];
         inet_ntop(AF_INET, &(target.sin_addr.s_addr), buf, 32);
-        cout << "TCP connecting to " << buf << ":" << targetPort 
-            << " (" << proxy.clientId << ")" << endl;
+        log->info("TCP connecting to %s:%d (%u)", buf, targetPort, proxy.clientId);
 
         int rc = connect(proxy.fd, (sockaddr*)&target, sizeof(target));
         if (rc != 0) {
@@ -251,7 +250,8 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
 
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == req.clientId) {
-                int rc = write(proxy.fd, req.contentPlaceholder, frameLen - 5);
+                // TODO: ERROR?                
+                write(proxy.fd, req.contentPlaceholder, frameLen - 5);
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;
@@ -385,10 +385,9 @@ int main(int argc, const char** argv) {
     flags = (flags | O_NONBLOCK);
     fcntl(serverFd, F_SETFL, flags);
 
-    int waitms = 2;
     struct timeval tv;
     tv.tv_sec = 0;
-    tv.tv_usec = waitms * 1000;
+    tv.tv_usec = 500;
     fd_set rfds, wfds;
 
     while (true) {
