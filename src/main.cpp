@@ -252,6 +252,7 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == req.clientId) {
                 int rc = write(proxy.fd, req.contentPlaceholder, frameLen - 5);
+                log->info("Write rc=%d", rc);
                 // Send a success message
                 sendTCPSendRespToClient(client, proxy.clientId);
                 return;
