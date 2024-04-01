@@ -20,6 +20,7 @@
 #include "microtunnel/common.h"
 #include "kc1fsz-tools/Common.h"
 #include "kc1fsz-tools/IPAddress.h"
+#include "kc1fsz-tools/Log.h"
 
 using namespace std;
 using namespace kc1fsz;
@@ -191,14 +192,15 @@ static void sendUDPBindRespToClient(Client& client, uint16_t id, uint16_t rc) {
     write(client.fd, &resp, resp.len);
 }
 
-static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen) {
+static void processClientFrame(Client& client, const uint8_t* frame, uint16_t frameLen,
+    Log* log) {
 
     const uint16_t reqLen = a_ntohs(*((uint16_t*)frame));
     const uint16_t reqType = a_ntohs(*((uint16_t*)(frame + 2)));
 
     // Sanity check
     if (reqLen != frameLen) {
-        cout << "Length error" << endl;
+        log->error("Length error");
         return;
     }
 
@@ -245,7 +247,7 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
         // TODO: SIZE CHECK
         RequestSendTCP req;
         memcpy(&req, frame, std::min((unsigned int)frameLen, (unsigned int)sizeof(req)));
-        prettyHexDump(req.contentPlaceholder, frameLen - 5, cout);
+        log->debugDump("Sending TCP data", req.contentPlaceholder, frameLen - 5);
 
         for (Proxy& proxy : client.proxies) {
             if (proxy.clientId == req.clientId) {
@@ -338,6 +340,9 @@ static void processClientFrame(Client& client, const uint8_t* frame, uint16_t fr
 
 int main(int argc, const char** argv) {
 
+    Log log;
+    log.info("MicroTunnel 2024-04-01");
+
     std::vector<Client> clients;
 
     // Open a socket to receive client connections
@@ -346,13 +351,13 @@ int main(int argc, const char** argv) {
     // socket create and verification 
     int serverFd = socket(AF_INET, SOCK_STREAM, 0); 
     if (serverFd == -1) { 
-        cerr << "Server socket creation failed" << endl;
+        log.error("Server socket creation failed");
         return -1;
     } 
 
     int v = 1;
     if (setsockopt(serverFd, SOL_SOCKET, SO_REUSEADDR, &v, sizeof(int)) < 0)
-        cerr << "setsockopt(SO_REUSEADDR) failed" << endl;
+        log.error("setsockopt(SO_REUSEADDR) failed");
 
     bzero(&serverAddr, sizeof(serverAddr));    
     // assign IP, PORT 
@@ -412,7 +417,7 @@ int main(int argc, const char** argv) {
                 socklen_t addrLen = sizeof(clientAddr);
                 int clientFd = accept(serverFd, (sockaddr*)&clientAddr, &addrLen); 
                 if (clientFd < 0) { 
-                    cout << "Client accept failed" << endl;
+                    log.error("Client accept failed");
                 } 
                 else {
                     // Make client non-blocking
@@ -442,7 +447,7 @@ int main(int argc, const char** argv) {
                     clients.push_back({ clientFd, clientAddr });
                     char buf[32];
                     inet_ntop(AF_INET, &(clients.at(0).addr.sin_addr), buf, 32);
-                    cout << "New client from " << buf << endl;
+                    log.info("New client from %s", buf);
                 }
             }
 
@@ -460,14 +465,14 @@ int main(int argc, const char** argv) {
                         maxReadSize = client.getFrameLen() - client.recBufLen;
                     }
                     int rc = read(client.fd, client.recBuf + client.recBufLen, maxReadSize);
-                    if (rc <= 0)                     {
+                    if (rc <= 0) {
                         client.isDead = true;
-                        cout << "Client disconnected" << endl;
+                        log.info("Client disconnected");
                     } else {
                         client.recBufLen += rc;
                         // Do we have a complete frame?
                         if (client.recBufLen >= 2 && client.recBufLen == client.getFrameLen()) {
-                            processClientFrame(client, client.recBuf, client.recBufLen);
+                            processClientFrame(client, client.recBuf, client.recBufLen, &log);
                             // Reset for new frame
                             client.recBufLen = 0;
                         }
@@ -484,11 +489,14 @@ int main(int argc, const char** argv) {
                             // Proxy disconnect case
                             if (rc <= 0) {
                                 proxy.isDead = true;
-                                cout << "Sending disconnect to client" << endl;
+                                log.info("Proxy %u disconnected", proxy.clientId);
                                 sendCloseRespToClient(client, proxy.clientId, 0);
                             } 
                             // Proxy received data, send it back to the client
                             else {
+                                log.info("Received data from proxy %u", proxy.clientId);
+                                log.debugDump("Data", buf, rc);
+
                                 sendTCPRecvRespToClient(client, proxy.clientId, buf, rc);
                             }
                         } 
